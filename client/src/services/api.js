@@ -1,11 +1,18 @@
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
+function getAuthHeaders(headers = {}) {
+  const token = localStorage.getItem('lead_token');
+
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...headers,
+  };
+}
+
 async function request(endpoint, options = {}) {
   const response = await fetch(`${API_URL}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
+    headers: getAuthHeaders(options.headers),
     ...options,
   });
 
@@ -18,6 +25,15 @@ async function request(endpoint, options = {}) {
 }
 
 export const api = {
+  signup: (payload) => request('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  login: (payload) => request('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  getMe: () => request('/auth/me'),
   getLeads: () => request('/leads'),
   createLead: (lead) => request('/leads', {
     method: 'POST',

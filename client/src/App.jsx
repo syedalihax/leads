@@ -9,12 +9,34 @@ const emptyForm = {
   notes: '',
 };
 
+const emptyAuthForm = {
+  name: '',
+  email: '',
+  password: '',
+};
+
 function App() {
+  const [token, setToken] = useState(localStorage.getItem('lead_token'));
+  const [user, setUser] = useState(null);
+  const [authMode, setAuthMode] = useState('login');
+  const [authForm, setAuthForm] = useState(emptyAuthForm);
+  const [authError, setAuthError] = useState('');
   const [leads, setLeads] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const loadCurrentUser = async () => {
+    try {
+      const data = await api.getMe();
+      setUser(data.user || data);
+    } catch (err) {
+      localStorage.removeItem('lead_token');
+      setToken(null);
+      setUser(null);
+    }
+  };
 
   const loadLeads = async () => {
     try {
@@ -30,8 +52,43 @@ function App() {
   };
 
   useEffect(() => {
-    loadLeads();
-  }, []);
+    if (token) {
+      loadCurrentUser();
+      loadLeads();
+    }
+  }, [token]);
+
+  const handleAuthChange = (event) => {
+    const { name, value } = event.target;
+    setAuthForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleAuthSubmit = async (event) => {
+    event.preventDefault();
+    setAuthError('');
+
+    try {
+      const response =
+        authMode === 'signup'
+          ? await api.signup(authForm)
+          : await api.login(authForm);
+
+      localStorage.setItem('lead_token', response.token);
+      setToken(response.token);
+      setUser(response.user);
+      setAuthForm(emptyAuthForm);
+    } catch (err) {
+      setAuthError(err.message);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('lead_token');
+    setToken(null);
+    setUser(null);
+    setLeads([]);
+    setError('');
+  };
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -76,6 +133,72 @@ function App() {
     }
   };
 
+  if (!token || !user) {
+    return (
+      <div className="auth-page">
+        <div className="auth-box">
+          <div className="auth-brand">LeadFlow</div>
+          <h1>{authMode === 'login' ? 'Login' : 'Sign Up'}</h1>
+          <form onSubmit={handleAuthSubmit} className="auth-form">
+            {authMode === 'signup' && (
+              <label>
+                Name
+                <input
+                  name="name"
+                  value={authForm.name}
+                  onChange={handleAuthChange}
+                  placeholder="Your full name"
+                  required
+                />
+              </label>
+            )}
+
+            <label>
+              Email
+              <input
+                type="email"
+                name="email"
+                value={authForm.email}
+                onChange={handleAuthChange}
+                placeholder="you@example.com"
+                required
+              />
+            </label>
+
+            <label>
+              Password
+              <input
+                type="password"
+                name="password"
+                value={authForm.password}
+                onChange={handleAuthChange}
+                placeholder="Minimum 6 characters"
+                required
+              />
+            </label>
+
+            {authError && <div className="error-box">{authError}</div>}
+
+            <button type="submit" className="primary-btn auth-submit">
+              {authMode === 'login' ? 'Login' : 'Create Account'}
+            </button>
+          </form>
+
+          <button
+            type="button"
+            className="toggle-auth"
+            onClick={() => {
+              setAuthMode((prev) => (prev === 'login' ? 'signup' : 'login'));
+              setAuthError('');
+            }}
+          >
+            {authMode === 'login' ? 'Need an account? Sign up' : 'Already have an account? Login'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -88,11 +211,13 @@ function App() {
           <button className="nav-item">Leads</button>
           <button className="nav-item">Reports</button>
         </nav>
+        <button type="button" className="logout-btn" onClick={handleLogout}>Logout</button>
       </aside>
 
       <main className="main-panel">
         <header className="topbar">
           <h1>Lead Management</h1>
+          <span className="user-badge">Hi, {user.name}</span>
         </header>
 
         <section className="content-grid">
